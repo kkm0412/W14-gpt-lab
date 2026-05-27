@@ -43,7 +43,15 @@ class BPETokenizer:
         1. 특수 토큰 4개를 고정 ID 0~3에 등록합니다.
         2. byte 0~255를 ID 4~259에 bytes([byte_value]) 형태로 등록합니다.
         """
-        raise NotImplementedError("_init_special_tokens를 구현하세요.")
+        
+        for token, idx in SPECIAL_IDS.items():
+            self.token_to_id[token] = idx
+            self.id_to_token[idx] = token
+
+        for i in range(NUM_BYTES):
+            self.id_to_token[i + BYTE_OFFSET] = bytes([i])
+            self.token_to_id[bytes([i])] = i + BYTE_OFFSET
+        
 
     def get_pad_id(self):
         """padding 토큰 ID."""
@@ -71,8 +79,47 @@ class BPETokenizer:
         - 새 token ID를 만들고, 시퀀스의 해당 pair를 새 ID로 치환합니다.
         - `self.merges`, `self.id_to_token`, `self.token_to_id`를 갱신합니다.
         """
-        raise NotImplementedError("BPETokenizer.train을 구현하세요.")
+        self._init_special_tokens()                             # 0~3 특수  토큰 4~259 byte token 로 기본 vocab 만들어줌
+        byteSe = corpus.encode("utf-8")                         # ex) "A" -> [65] "가"->[234,176,128] 처럼 문자열 corpus를 UTF-8 sequence로 바꾼다
+        #  b'254,123,111' -> [258, 127, 115]
+        byteIdSe = []
+        for i in range(len(byteSe)): # 0,1,2                    # ex) byte 65 -> token id 69 각 byte 값들을 token id 로 바꿔서 byteIdSe 리스트에 삽입
+            byteIdSe.append(byteSe[i] + BYTE_OFFSET)           
+       # 리스트 컴프리헨션 byteIdSE = [byte + NUM_BYTES for byte in byteSe]
+       # A 한번만 a byte 한 byte3   a b c d   
+        while (len(self.id_to_token) < self.vocab_size):        # 현재 vocab_size 3000인 크기에 도달할때까지 현재 vocab 크기에 merge token을 추가한다 | len(id_to_token) = 현재 vocab에 등록된 token 종류 수
+            pair_counts = {}                                    # 인접 piar count 용
+            
+            for i in range (len(byteIdSe) -1):                  # 현재 token과 다음 token을 묶어서 pair로 만든다 이미 본 count를 증가시키고 처음 본 pair면 1로 시작 즉 pair의 등장횟수를 count로 저장
+                pair = (byteIdSe[i], byteIdSe[i+1])
+                if pair in pair_counts:
+                    pair_counts[pair] += 1
+                else:
+                    pair_counts[pair] = 1 
+            if not pair_counts:                                 # 인접 pair없으면 merge 할 수 없기에 반복문 멈춤
+                break
+            best_pair = max(pair_counts, key = pair_counts.get) # pair_counts 안의 pair들 중 count 값이 가장 큰 pair를 골라라     {(155,76):2,(156,77):3}
 
+            new_id = len(self.id_to_token)                      # 새 merge token 의 ID를 만든다
+
+            self.id_to_token[new_id] = best_pair                # 새 token id가 어떤 pair를 의미하는지 저장
+            self.token_to_id[best_pair] = new_id                # 반대 방향도 저장 나중에 encode할 때 어떤 pair가 merge 대상인지 찾을 수 있다.
+            self.merges.append(best_pair)                       # merge 규칙을 학습된 순서대로 저장한다 encode() 는 나중에 self.merges를 앞에서부터 순서대로 적용한다
+
+            new_sequence = []                                   # 이제 현재 token sequence안에서 best_pair가 나오는 부분을 새 token id로 실제 치환한다. 치환 결과를 담을 새 리스트를 만든다
+            j = 0
+
+            while j < len(byteIdSe):                            # byteIdSe의 처음부터 끝까지 처리 현재 token과 다음 token이 best pair인지 확인한다
+                if j < len(byteIdSe) - 1 and (byteIdSe[j], byteIdSe[j + 1]) == best_pair: # 현재 pair가 best_pair라면 두 token을 새 token 하나로 바꾼다 이미 두 token을 처리했으므로 j를 2칸 이동 
+                    new_sequence.append(new_id)
+                    j += 2
+                else:                                                                     # 현재 위치가 best_pai가 아니라면 기존 token을 그대로 넣는다 하나의 token을 처리했으므로 j를 1칸 이동
+                    new_sequence.append(byteIdSe[j])
+                    j += 1
+
+            byteIdSe = new_sequence
+
+            
     def save(self, path: str | Path):
         """
         TODO: vocabulary와 merge rule을 JSON 파일로 저장합니다.
