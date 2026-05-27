@@ -109,8 +109,8 @@ class BPETokenizer:
 
             # token_ids update
             token_ids = new_token_ids
-            # new_token을 tuple이 아닌 byte object로 저장
-            new_token = self.id_to_token[most_frequent_pair[0]] + self.id_to_token[most_frequent_pair[1]]
+            # new_token을 tuple로 저장
+            new_token = most_frequent_pair
             self.merges.append(most_frequent_pair)
             self.id_to_token[new_id] = new_token
             self.token_to_id[new_token] = new_id
@@ -125,7 +125,9 @@ class BPETokenizer:
         """
         saved_id_to_token = {}
         for token_id, token in self.id_to_token.items():
-            if isinstance(token, bytes):
+            if isinstance(token, tuple):
+                saved_id_to_token[token_id] = {"type": "tuple", "value": list(token)}
+            elif isinstance(token, bytes):
                 saved_id_to_token[token_id] = {"type": "bytes", "value": list(token)}
             else:
                 saved_id_to_token[token_id] = {"type": "special", "value": token}
@@ -156,6 +158,8 @@ class BPETokenizer:
         for token_id, token_dict in data["id_to_token"].items():
             if token_dict["type"] == "bytes":
                 self.id_to_token[int(token_id)] = bytes(token_dict["value"])
+            elif token_dict["type"] == "tuple":
+                self.id_to_token[int(token_id)] = tuple(token_dict["valueㅋ"])
             else:
                 self.id_to_token[int(token_id)] = token_dict["value"]
         
