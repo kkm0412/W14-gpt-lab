@@ -79,17 +79,20 @@ class BPETokenizer:
         """문장 끝 토큰 ID."""
         return SPECIAL_IDS[EOS_TOKEN]
     
-    def replace_pair(self, token_ids, pair, new_id):
-        curr = 0
-        next = 0
+    def replace_pair(self, byte_id_sequence, pair, new_id):
+    
         i = 0
-        self.byte_id_sequence[i] = curr
-        self.byte_id_sequence[i+1] = next
         
-        while next:
+        while i < len(byte_id_sequence) - 1:
+            curr = byte_id_sequence[i]
+            next = byte_id_sequence[i+1]
+            
             if (curr, next) == pair:
-                curr = pair
-                self.byte_id_sequence.pop(i+1)
+                byte_id_sequence[i] = new_id
+                byte_id_sequence.pop(i+1)
+
+            else:
+                i += 1
   
         return
     
@@ -106,8 +109,8 @@ class BPETokenizer:
         """
         pair_count = Counter(zip(byte_id_sequence, byte_id_sequence[1:]))
         
-        if pair_count.most_common(1)[1] >= 2:
-            most_common_pair = pair_count.most_common(1)[0][1]
+        if pair_count.most_common(1)[0][1] >= 2:
+            most_common_pair = pair_count.most_common(1)[0][0]
             return most_common_pair
         
         return None
@@ -125,15 +128,16 @@ class BPETokenizer:
         # corpus를 utf-8로 변환하고 byte sequence를 만든다.
         byte_id_sequence = list(corpus.encode("utf-8"))
         
-        while(self.find_freq_pair(byte_id_sequence) and len(self.merges) <= self.vocab_size):
+        while(self.find_freq_pair(byte_id_sequence) and len(self.merges) <= self.vocab_size-260):
             curr_pair = self.find_freq_pair(byte_id_sequence)
             self.merges.append(curr_pair)
             
             new_id = 259 + len(self.merges)
-            self.id_to_token[new_id] = curr_pair
-            self.token_to_id[curr_pair] = new_id
+            new_token = self.id_to_token[curr_pair[0]] + self.id_to_token[curr_pair[1]]
+            self.id_to_token[new_id] = new_token
+            self.token_to_id[new_token] = new_id
             
-            replace_pair(byte_id_sequence, curr_pair, new_id)
+            self.replace_pair(byte_id_sequence, curr_pair, new_id)
 
         raise NotImplementedError("BPETokenizer.train을 구현하세요.")
 
