@@ -8,6 +8,7 @@ UTF-8 byte-level BPE 토크나이저 과제 템플릿.
 """
 
 from pathlib import Path
+from collections import defaultdict
 
 
 PAD_TOKEN = "<pad>"
@@ -36,6 +37,7 @@ class BPETokenizer:
         self.id_to_token = {}
         self.token_to_id = {}
         self.merges = []
+        self._init_special_tokens()
 
     def _init_special_tokens(self):
         """
@@ -76,8 +78,44 @@ class BPETokenizer:
         - 가장 자주 등장하는 이웃 token pair를 찾습니다.
         - 새 token ID를 만들고, 시퀀스의 해당 pair를 새 ID로 치환합니다.
         - `self.merges`, `self.id_to_token`, `self.token_to_id`를 갱신합니다.
-        """
-        raise NotImplementedError("BPETokenizer.train을 구현하세요.")
+        """ 
+        # corpus를 utf-8로 encode, byte seqeunce 생성
+        byte_sequence = corpus.encode("utf-8") # bytes 타입의 byte 값들이 나열된 객체
+        # byte sequnece를 순회하며 각 byte에 4를 더해 vocabulary 안의 token ID로 변환해 byte token id sequence 생성
+        token_ids = [byte + BYTE_OFFSET for byte in byte_sequence]
+
+        new_id = len(self.token_to_id)
+        while ((new_id < self.vocab_size) and len(token_ids) >= 2):
+            # 가장 자주 등장하는 이웃 token pair 찾기
+            frequency = defaultdict(int)
+            for i in range(len(token_ids) - 1):
+                frequency[(token_ids[i], token_ids[i + 1])] += 1
+
+            most_frequent_pair = max(frequency, key = lambda pair: frequency[pair])
+
+            # 가장 자주 등장한 이웃의 빈도수가 2보다 작으면 merge 진행 X
+            if frequency[most_frequent_pair] < 2:
+                break
+            # new token ID sequence를 만들고, sequence의 해당 pair를 새 ID로 치환
+            new_token_ids = []
+            i = 0
+            while i < len(token_ids):
+                if i < len(token_ids) - 1 and (token_ids[i], token_ids[i + 1]) == most_frequent_pair:
+                    new_token_ids.append(new_id)
+                    i += 2
+                else:
+                    new_token_ids.append(token_ids[i])
+                    i += 1
+
+            # token_ids update
+            token_ids = new_token_ids
+            # new_token을 tuple이 아닌 byte object로 저장
+            new_token = self.id_to_token[most_frequent_pair[0]] + self.id_to_token[most_frequent_pair[1]]
+            self.merges.append(most_frequent_pair)
+            self.id_to_token[new_id] = new_token
+            self.token_to_id[new_token] = new_id
+
+            new_id += 1
 
     def save(self, path: str | Path):
         """
