@@ -8,7 +8,7 @@ UTF-8 byte-level BPE 토크나이저 과제 템플릿.
 """
 
 from pathlib import Path
-
+from collections import Counter
 
 PAD_TOKEN = "<pad>"
 UNK_TOKEN = "<unk>"
@@ -79,7 +79,21 @@ class BPETokenizer:
         """문장 끝 토큰 ID."""
         return SPECIAL_IDS[EOS_TOKEN]
     
-    def find_freq_pair(byte_id_sequence):
+    def replace_pair(self, token_ids, pair, new_id):
+        curr = 0
+        next = 0
+        i = 0
+        self.byte_id_sequence[i] = curr
+        self.byte_id_sequence[i+1] = next
+        
+        while next:
+            if (curr, next) == pair:
+                curr = pair
+                self.byte_id_sequence.pop(i+1)
+  
+        return
+    
+    def find_freq_pair(self, byte_id_sequence):
         """자주 등장하는 인접 쌍 찾기
         인접한 두 쌍:count의 dict을 만들고, 가장 count가 높은 pair을 반환한다. 만약 2번 이상 나타나는
         쌍이 없으면 None을 반환한다.
@@ -88,19 +102,17 @@ class BPETokenizer:
             byte_id_sequence (list): id bytes list
 
         Returns:
-            _type_: int
+            tuple[tuple[int, int], int] | None: ((token_a, token_b), count)
         """
         pair_count = Counter(zip(byte_id_sequence, byte_id_sequence[1:]))
         
         if pair_count.most_common(1)[1] >= 2:
-            most_common_pair = pair_count.most_common(1)[0]
+            most_common_pair = pair_count.most_common(1)[0][1]
             return most_common_pair
         
         return None
 
     def train(self, corpus: str):
-        from collections import Counter
-
         """
         TODO: 코퍼스에서 BPE merge rule과 vocabulary를 학습합니다.
 
@@ -111,10 +123,18 @@ class BPETokenizer:
         - `self.merges`, `self.id_to_token`, `self.token_to_id`를 갱신합니다.
         """
         # corpus를 utf-8로 변환하고 byte sequence를 만든다.
-        byte_id_sequence = bytes(corpus.encode("utf-8"))
+        byte_id_sequence = list(corpus.encode("utf-8"))
         
-        
-        
+        while(self.find_freq_pair(byte_id_sequence) and len(self.merges) <= self.vocab_size):
+            curr_pair = self.find_freq_pair(byte_id_sequence)
+            self.merges.append(curr_pair)
+            
+            new_id = 259 + len(self.merges)
+            self.id_to_token[new_id] = curr_pair
+            self.token_to_id[curr_pair] = new_id
+            
+            replace_pair(byte_id_sequence, curr_pair, new_id)
+
         raise NotImplementedError("BPETokenizer.train을 구현하세요.")
 
     def save(self, path: str | Path):
