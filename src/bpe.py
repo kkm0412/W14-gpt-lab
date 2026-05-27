@@ -201,8 +201,31 @@ class BPETokenizer:
         - train/load에서 얻은 merge rule을 학습 순서대로 적용합니다.
         - add_bos_eos=True이면 앞뒤에 bos/eos ID를 붙입니다.
         """
-        raise NotImplementedError("BPETokenizer.encode를 구현하세요.")
+        byteSe = text.encode("utf-8")                         # 입력 문자열을 UTF-8 byte sequence로 변환 ex) "A" -> [65], "가" -> [234, 176, 128]
 
+        byteIdSe = []                                         # encode 결과를 만들기 전, 먼저 byte 값들을 기본 byte token id로 바꿔 담을 리스트
+        for i in range(len(byteSe)):                          # UTF-8 byte sequence의 각 byte 값을 하나씩 확인
+            byteIdSe.append(byteSe[i] + BYTE_OFFSET)          # special token 0~3을 피하기 위해 byte 값에 4를 더해 token id로 변환 ex) 65 -> 69
+
+        for merge_pair in self.merges:                        # train/load에서 얻은 merge rule을 학습된 순서대로 하나씩 적용
+            new_id = self.token_to_id[merge_pair]             # 현재 merge_pair가 vocab에서 어떤 token id인지 찾음 ex) (69, 70) -> 260
+
+            new_sequence = []                                 # 현재 merge rule을 적용한 결과를 새로 담을 리스트; 원본을 직접 고치면 인덱스가 꼬일 수 있음
+            j = 0                                             # 현재 byteIdSe에서 처리 중인 위치
+
+            while j < len(byteIdSe):                          # 현재 token sequence를 처음부터 끝까지 훑으며 merge_pair가 있는지 확인
+                if j < len(byteIdSe) - 1 and (byteIdSe[j], byteIdSe[j + 1]) == merge_pair: # 현재 token과 다음 token이 merge 대상이면
+                    new_sequence.append(new_id)               # 두 token을 merge token 하나로 치환해서 결과 리스트에 추가
+                    j += 2                                    # token 두 개를 이미 처리했으므로 두 칸 이동
+                else:
+                    new_sequence.append(byteIdSe[j])          # merge 대상이 아니면 현재 token을 그대로 결과 리스트에 추가
+                    j += 1                                    # token 하나만 처리했으므로 한 칸 이동
+            byteIdSe = new_sequence                           # 이번 merge rule 적용 결과를 다음 merge rule의 입력 sequence로 사용
+
+        if add_bos_eos:                                       # 호출할 때 add_bos_eos=True이면 문장 시작/끝 표시 token을 붙임
+            byteIdSe = [self.get_bos_id()] + byteIdSe + [self.get_eos_id()] # 앞에는 <bos>, 뒤에는 <eos> token id를 추가
+
+        return byteIdSe                                       # 최종 token id 리스트를 반환; GPT 모델 입력으로 사용할 수 있는 숫자 sequence
     def decode(self, ids: list[int], skip_special: bool = True) -> str:
         """
         TODO: token ID 리스트를 문자열로 복원합니다.
@@ -211,4 +234,29 @@ class BPETokenizer:
         - merge token은 원본 byte token까지 재귀적으로 펼칩니다.
         - byte를 하나씩 decode하지 말고, 마지막에 `bytes(...).decode("utf-8")`를 한 번만 호출합니다.
         """
-        raise NotImplementedError("BPETokenizer.decode를 구현하세요.")
+        def token_to_bytes(token_id: int) -> list[int]:        # token id 하나를 원래 byte 값 리스트로 풀어주는 내부 함수
+            token = self.id_to_token.get(token_id)             # id_to_token에서 현재 token id가 무엇을 의미하는지 찾음
+
+            if token is None:                                  # vocab에 없는 id가 들어오면 복원할 정보가 없으므로 빈 리스트 반환
+                return []
+
+            if isinstance(token, bytes):                       # 기본 byte token인 경우 ex) token id 69 -> b"A"
+                return list(token)                             # b"A" -> [65]처럼 실제 byte 값 리스트로 변환
+
+            if isinstance(token, tuple):                       # merge token인 경우 ex) 260 -> (69, 70)
+                byte_values = []                               # merge token 내부 token들을 byte까지 풀어서 담을 리스트
+                for inner_id in token:                         # merge token은 두 token id를 합친 것이므로 내부 id를 하나씩 확인
+                    byte_values.extend(token_to_bytes(inner_id)) # 내부 token도 merge일 수 있으므로 재귀적으로 끝까지 byte token까지 펼침
+                return byte_values                             # merge token 전체를 원래 byte 값 리스트로 복원한 결과 반환
+
+            if skip_special:                                   # special token 문자열이고 skip_special=True이면 결과 문자열에서 제외
+                return []
+
+            return list(token.encode("utf-8"))                 # skip_special=False이면 "<bos>" 같은 문자열도 보이도록 UTF-8 byte로 변환
+
+        byte_values = []                                       # 모든 token id를 풀어서 얻은 byte 값들을 순서대로 모을 리스트
+
+        for token_id in ids:                                   # 입력으로 들어온 token id sequence를 왼쪽부터 하나씩 처리
+            byte_values.extend(token_to_bytes(token_id))       # 각 token id를 byte 값들로 풀고 전체 byte 리스트에 이어 붙임
+
+        return bytes(byte_values).decode("utf-8")              # 한글은 여러 byte로 이루어지므로 byte를 전부 모은 뒤 마지막에 한 번만 UTF-8 decode
