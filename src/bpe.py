@@ -159,7 +159,7 @@ class BPETokenizer:
             if token_dict["type"] == "bytes":
                 self.id_to_token[int(token_id)] = bytes(token_dict["value"])
             elif token_dict["type"] == "tuple":
-                self.id_to_token[int(token_id)] = tuple(token_dict["valueㅋ"])
+                self.id_to_token[int(token_id)] = tuple(token_dict["value"])
             else:
                 self.id_to_token[int(token_id)] = token_dict["value"]
         
