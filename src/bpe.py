@@ -80,7 +80,9 @@ class BPETokenizer:
         return SPECIAL_IDS[EOS_TOKEN]
     
     def replace_pair(self, byte_id_sequence, pair, new_id):
-    
+        """
+        id list를 순회하면서 pair을 찾아 new_id로 치환한다
+        """
         i = 0
         
         while i < len(byte_id_sequence) - 1:
@@ -93,7 +95,6 @@ class BPETokenizer:
 
             else:
                 i += 1
-  
         return
     
     def find_freq_pair(self, byte_id_sequence):
@@ -138,22 +139,45 @@ class BPETokenizer:
             self.token_to_id[new_token] = new_id
             
             self.replace_pair(byte_id_sequence, curr_pair, new_id)
-
+        
+        return
         raise NotImplementedError("BPETokenizer.train을 구현하세요.")
 
     def save(self, path: str | Path):
-        """
-        TODO: vocabulary와 merge rule을 JSON 파일로 저장합니다.
+        # bytes는 JSON 불가 → type 태그 + 정수 리스트로 변환
+        serialized = {}
+        for token_id, token in self.id_to_token.items():
+            if isinstance(token, bytes):
+                serialized[str(token_id)] = {"type": "bytes", "value": list(token)}
+            else:  # 특수 토큰(str)
+                serialized[str(token_id)] = {"type": "str", "value": token}
 
-        bytes와 tuple은 JSON에 바로 저장할 수 없으므로 type 정보를 함께 저장하세요.
-        """
-        raise NotImplementedError("BPETokenizer.save를 구현하세요.")
+        data = {
+            "vocab_size": self.vocab_size,
+            "id_to_token": serialized,
+            "merges": [list(pair) for pair in self.merges],  # tuple → list
+        }
+
+        import json
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
 
     def load(self, path: str | Path):
-        """
-        TODO: save()로 저장한 JSON 파일을 읽어 vocabulary와 merge rule을 복원합니다.
-        """
-        raise NotImplementedError("BPETokenizer.load를 구현하세요.")
+        import json
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        self.vocab_size = data["vocab_size"]
+        self.merges = [tuple(pair) for pair in data["merges"]]  # list → tuple 복원
+
+        # JSON 키는 항상 str → int로 복원, value는 type 태그 보고 복원
+        self.id_to_token = {}
+        for key, entry in data["id_to_token"].items():
+            token = bytes(entry["value"]) if entry["type"] == "bytes" else entry["value"]
+            self.id_to_token[int(key)] = token
+
+        # id_to_token 역방향으로 token_to_id 재구성
+        self.token_to_id = {token: token_id for token_id, token in self.id_to_token.items()}
 
     def encode(self, text: str, add_bos_eos: bool = False) -> list[int]:
         """
@@ -164,6 +188,21 @@ class BPETokenizer:
         - train/load에서 얻은 merge rule을 학습 순서대로 적용합니다.
         - add_bos_eos=True이면 앞뒤에 bos/eos ID를 붙입니다.
         """
+        # 1. text를 utf-8 byte로 펼치고, 각 byte 값에 BYTE_OFFSET(4)을 더해 ID 리스트로 만든다.
+        byte_id_list = [BYTE_OFFSET+byte for byte in text.encode("utf-8")]
+        
+        # 2. self.merges를 merge rule학습 순서대로 순회한다 (enumerate로 인덱스도 같이):
+        for pair in range(self.merges):
+            new_id = self.token_to_id[pair]
+            self.replace_pair(byte_id_list, pair, new_id)
+            
+        # 3. add_bos_eos=True이면 merge가 다 끝난 뒤 맨 앞에 bos, 맨 뒤에 eos ID를 붙인다.
+        if add_bos_eos == True:
+            byte_id_list = BOS_TOKEN + byte_id_list + EOS_TOKEN
+            
+        # 4. 완성된 ID 리스트를 반환한다.
+        return byte_id_list
+        
         raise NotImplementedError("BPETokenizer.encode를 구현하세요.")
 
     def decode(self, ids: list[int], skip_special: bool = True) -> str:
@@ -174,6 +213,18 @@ class BPETokenizer:
         - merge token은 원본 byte token까지 재귀적으로 펼칩니다.
         - byte를 하나씩 decode하지 말고, 마지막에 `bytes(...).decode("utf-8")`를 한 번만 호출합니다.
         """
+        # 1. 모든 byte를 모을 빈 버퍼(byte 리스트 or bytearray)를 준비한다.
+        byte_list = []
+        # 2. ids를 하나씩 순회한다:
+        #    - 특수 토큰(0~3)이고 skip_special=True이면 건너뛴다.
+        #    - 그 외에는 id_to_token[id]로 토큰을 꺼낸다.
+        #      (우리 구현은 merge 토큰도 이미 펼쳐진 bytes로 저장돼 있어
+        #       재귀 없이 바로 bytes를 얻는다.)
+        #    - 꺼낸 bytes를 버퍼에 이어붙인다.
+
+        #
+        # 3. 루프가 끝난 뒤, 모인 전체 bytes를 한 번에 .decode("utf-8")로 문자열 복원.
+        #    (한글이 byte 경계에서 잘릴 수 있으므로 반드시 마지막에 한 번만 호출)
         raise NotImplementedError("BPETokenizer.decode를 구현하세요.")
 
 if __name__ == "__main__":
