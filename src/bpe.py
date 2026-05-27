@@ -205,6 +205,7 @@ class BPETokenizer:
         
         raise NotImplementedError("BPETokenizer.encode를 구현하세요.")
 
+    
     def decode(self, ids: list[int], skip_special: bool = True) -> str:
         """
         TODO: token ID 리스트를 문자열로 복원합니다.
@@ -214,17 +215,17 @@ class BPETokenizer:
         - byte를 하나씩 decode하지 말고, 마지막에 `bytes(...).decode("utf-8")`를 한 번만 호출합니다.
         """
         # 1. 모든 byte를 모을 빈 버퍼(byte 리스트 or bytearray)를 준비한다.
-        byte_list = []
+        byte_buffer = bytearray()
+        
         # 2. ids를 하나씩 순회한다:
-        #    - 특수 토큰(0~3)이고 skip_special=True이면 건너뛴다.
-        #    - 그 외에는 id_to_token[id]로 토큰을 꺼낸다.
-        #      (우리 구현은 merge 토큰도 이미 펼쳐진 bytes로 저장돼 있어
-        #       재귀 없이 바로 bytes를 얻는다.)
-        #    - 꺼낸 bytes를 버퍼에 이어붙인다.
-
-        #
+        for id in ids:
+            if skip_special and id < BYTE_OFFSET:
+                continue
+            byte_buffer += self.id_to_token[id]
+  
         # 3. 루프가 끝난 뒤, 모인 전체 bytes를 한 번에 .decode("utf-8")로 문자열 복원.
-        #    (한글이 byte 경계에서 잘릴 수 있으므로 반드시 마지막에 한 번만 호출)
+        result = byte_buffer.decode("utf-8")
+        return result
         raise NotImplementedError("BPETokenizer.decode를 구현하세요.")
 
 if __name__ == "__main__":
