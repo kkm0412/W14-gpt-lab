@@ -176,7 +176,27 @@ class BPETokenizer:
         - train/load에서 얻은 merge rule을 학습 순서대로 적용합니다.
         - add_bos_eos=True이면 앞뒤에 bos/eos ID를 붙입니다.
         """
-        raise NotImplementedError("BPETokenizer.encode를 구현하세요.")
+        byte_sequence = text.encode("utf-8") # bytes 타입의 byte 값들이 나열된 객체
+        # byte sequnece를 순회하며 각 byte에 4를 더해 vocabulary 안의 token ID로 변환해 byte token id sequence 생성
+        token_ids = [byte + BYTE_OFFSET for byte in byte_sequence]
+        
+        for merged_pair in self.merges:
+            i = 0
+            new_token_ids = []
+            while i < len(token_ids):
+                if i < len(token_ids) - 1 and (token_ids[i], token_ids[i + 1]) == merged_pair:
+                    new_token_ids.append(self.token_to_id[merged_pair])
+                    i += 2
+                else:
+                    new_token_ids.append(token_ids[i])
+                    i += 1
+            
+            token_ids = new_token_ids
+        
+        if add_bos_eos:
+            token_ids = [self.get_bos_id()] + token_ids + [self.get_eos_id()]
+
+        return token_ids
 
     def decode(self, ids: list[int], skip_special: bool = True) -> str:
         """
@@ -186,4 +206,9 @@ class BPETokenizer:
         - merge token은 원본 byte token까지 재귀적으로 펼칩니다.
         - byte를 하나씩 decode하지 말고, 마지막에 `bytes(...).decode("utf-8")`를 한 번만 호출합니다.
         """
+        # [260 211 233] -> [258 259 211 233]
+        decoded_ids = []
+        
+                
+        
         raise NotImplementedError("BPETokenizer.decode를 구현하세요.")
