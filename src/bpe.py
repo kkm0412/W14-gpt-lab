@@ -207,8 +207,29 @@ class BPETokenizer:
         - byte를 하나씩 decode하지 말고, 마지막에 `bytes(...).decode("utf-8")`를 한 번만 호출합니다.
         """
         # [260 211 233] -> [258 259 211 233]
-        decoded_ids = []
-        
+        byte_parts = [] # bytes 객체들이 담길 리스트
+        """
+        인자로 받은 token의 요소들을 bytes 객체로 만들어주는 재귀 함수 
+        Base case: token의 data type이 bytes일 때
+        Return: bytes 객체
+        """
+        def expand(token):
+            # token type이 bytes 라면 이미 호출자에서 id_to_token 되었으니 그대로 반환
+            if isinstance(token, bytes):
+                return token
+            # token type이 tuple 이라면, tuple 안의 요소들은 여전히 id 이므로 한 번 더 변환 필요
+            elif isinstance(token, tuple):
+                token0, token1 = self.id_to_token[token[0]], self.id_to_token[token[1]]
+                return expand(token0) + expand(token1)
+
+        # ids의 왼쪽부터 펼치고, byte_parts에 token_id에 대한 bytes 객체들이 새로 담긴다.
+        for token_id in ids:
+            token = self.id_to_token[token_id]
+            # token이 type이 special token 일 경우
+            if skip_special and isinstance(token, str):
+                continue
+            # token type이 bytes 혹은 tuple 일 경우
+            byte_parts.append(expand(token))
                 
-        
-        raise NotImplementedError("BPETokenizer.decode를 구현하세요.")
+        merged_bytes = b"".join(byte_parts) # bytes 객체들을 하나로 연결
+        return merged_bytes.decode("utf-8")
