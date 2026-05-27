@@ -52,7 +52,7 @@
 | 사전 학습 데이터 | `data/nsmc_lm_train.txt`, `data/nsmc_lm_val.txt` |
 | 미세 조정 데이터 | `data/nsmc_sentiment_train.jsonl`, `data/nsmc_sentiment_val.jsonl`, `data/nsmc_sentiment_test.jsonl` |
 | 전처리 방식 | 빈 리뷰 제거, 공백 정리, train/validation 분리 |
-| 사용한 데이터 크기 | Smoke / Light / Basic 중 선택 |
+| 사용한 데이터 크기 | Basic |
 
 ---
 
@@ -64,11 +64,16 @@
 | BPE 방식 | UTF-8 byte-level BPE |
 | 특수 토큰 ID | `<pad>=0`, `<unk>=1`, `<bos>=2`, `<eos>=3` |
 | byte token ID 범위 | 4~259 |
-| vocab_size | (예: 3000) |
-| 학습 corpus 크기 | (예: `corpus[:1_500_000]`) |
-| 어휘 학습 시간 | (예: Colab CPU Basic 설정 35분) |
-| vocabulary 저장 경로 | (예: `data/nsmc_bpe_vocab_3000.json`) |
-| 인코딩/디코딩 복원 예시 | (예: `decode(encode("이 영화는 좋았다")) == 원문`) |
+| vocab_size | 3000 |
+| 학습 corpus 크기 | `corpus[:1_500_000]` = 1,379,486 chars / 3,335,336 bytes |
+| 어휘 학습 시간 | Local: 503.35초(8.39분), Colab GPU 런타임: 1850.34초(30.84분) |
+| vocabulary 저장 경로 | Local: `data/nsmc_bpe_vocab_3000.json`, Colab: `/content/drive/MyDrive/W14-gpt-lab/data/nsmc_bpe_vocab_3000.json` |
+| 인코딩/디코딩 복원 예시 | `decode(encode("이 영화는 정말 좋았다! English 123")) == 원문` |
+
+| 환경 | Python | corpus 크기 | vocab_size | 실제 vocab 크기 | 어휘 학습 시간 | 저장 경로 | 복원 확인 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Local | 3.11.14 | 1,379,486 chars / 3,335,336 bytes | 3000 | 3000 | 503.35초 / 8.39분 | `data/nsmc_bpe_vocab_3000.json` | True |
+| Colab GPU 런타임 | 3.12.13 | 1,379,486 chars / 3,335,336 bytes | 3000 | 3000 | 1850.34초 / 30.84분 | `/content/drive/MyDrive/W14-gpt-lab/data/nsmc_bpe_vocab_3000.json` | True |
 
 ---
 
