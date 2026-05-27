@@ -8,7 +8,7 @@ UTF-8 byte-level BPE 토크나이저 과제 템플릿.
 """
 
 from pathlib import Path
-
+import json
 
 PAD_TOKEN = "<pad>"
 UNK_TOKEN = "<unk>"
@@ -100,6 +100,9 @@ class BPETokenizer:
                 break
             best_pair = max(pair_counts, key = pair_counts.get) # pair_counts 안의 pair들 중 count 값이 가장 큰 pair를 골라라     {(155,76):2,(156,77):3}
 
+            if pair_counts[best_pair] < 2:
+                break
+
             new_id = len(self.id_to_token)                      # 새 merge token 의 ID를 만든다
 
             self.id_to_token[new_id] = best_pair                # 새 token id가 어떤 pair를 의미하는지 저장
@@ -126,13 +129,68 @@ class BPETokenizer:
 
         bytes와 tuple은 JSON에 바로 저장할 수 없으므로 type 정보를 함께 저장하세요.
         """
-        raise NotImplementedError("BPETokenizer.save를 구현하세요.")
 
+
+        path = Path(path)                                      # 문자열 경로가 들어와도 Path 객체로 통일해서 path.open(...)처럼 파일 경로 기능을 쓰기 위함
+
+        vocab_data = {}                                        # self.id_to_token을 JSON이 저장할 수 있는 형태로 바꿔 담을 저장용 vocab dict
+
+        for token_id, token in self.id_to_token.items():       # 현재 vocab에 등록된 token id와 token 값을 하나씩 꺼내 JSON용 형태로 변환
+            token_id_str = str(token_id)                       # JSON의 key는 문자열로 저장되므로 id를 str로 바꿔 저장하고 load 때 다시 int로 복원
+
+            if isinstance(token, bytes):                       # byte token인 경우 ex) b"A"; JSON은 bytes를 직접 저장하지 못함
+                vocab_data[token_id_str] = {
+                    "type": "bytes",                          # load에서 bytes(...)로 복원할 수 있게 원래 타입 정보를 함께 저장
+                    "value": list(token),                      # ex) b"A" -> [65]; byte 값을 JSON이 저장 가능한 숫자 리스트로 변환
+                }
+            elif isinstance(token, tuple):                     # merge token인 경우 ex) (69, 70); JSON은 tuple 타입을 직접 보존하지 못함
+                vocab_data[token_id_str] = {
+                    "type": "tuple",                          # load에서 tuple(...)로 복원할 수 있게 merge token이었다는 타입 정보를 저장
+                    "value": list(token),                      # ex) (69, 70) -> [69, 70]; JSON이 저장 가능한 리스트로 변환
+                }
+            else:                                              # bytes/tuple이 아니면 <pad>, <unk>, <bos>, <eos> 같은 special token 문자열
+                vocab_data[token_id_str] = {
+                    "type": "str",                             # load에서 문자열 그대로 복원하면 된다는 타입 정보
+                    "value": token,                            # 문자열은 JSON에 그대로 저장 가능하므로 변환하지 않음
+                }
+
+        merges_data = []                                       # self.merges의 tuple pair들을 JSON 저장용 list pair로 바꿔 담을 리스트
+        for pair in self.merges:                               # 학습된 merge rule을 순서대로 하나씩 꺼냄; encode에서 이 순서가 중요함
+            merges_data.append(list(pair))                     # ex) (69, 70) -> [69, 70]; JSON 저장 후 load에서 다시 tuple로 복원
+
+        data = {
+            "vocab_size": self.vocab_size,                     # tokenizer가 어떤 vocab 크기 설정으로 만들어졌는지 저장
+            "id_to_token": vocab_data,                         # decode 때 token id가 무엇을 의미하는지 복원하기 위한 vocab 정보
+            "merges": merges_data,                             # encode 때 어떤 pair를 어떤 순서로 합칠지 복원하기 위한 merge rule 정보
+        }
+
+        with path.open("w", encoding="utf-8") as f:            # 저장할 JSON 파일을 쓰기 모드로 열고, 한글이 깨지지 않게 UTF-8 인코딩 사용
+            json.dump(data, f, ensure_ascii=False)             # 메모리의 data dict를 실제 JSON 파일로 저장; ensure_ascii=False는 한글을 읽기 좋게 저장
+            
     def load(self, path: str | Path):
         """
         TODO: save()로 저장한 JSON 파일을 읽어 vocabulary와 merge rule을 복원합니다.
         """
-        raise NotImplementedError("BPETokenizer.load를 구현하세요.")
+        with open(path, "r", encoding="utf-8") as f:           # save()가 만든 JSON 파일을 읽기 모드로 열고 UTF-8로 해석
+            data = json.load(f)                                # JSON 파일 내용을 Python dict로 읽어와서 vocab/merge 정보를 꺼낼 준비
+
+        self.vocab_size = data["vocab_size"]                   # 저장 당시 tokenizer의 vocab_size 설정값을 다시 복원
+        self.merges = [tuple(pair) for pair in data["merges"]] # JSON에는 list로 저장된 merge pair들을 encode가 쓰기 좋은 tuple pair 리스트로 복원
+        self.id_to_token = {}                                  # 파일에 저장된 vocab으로 새로 채우기 위해 기존 id_to_token을 초기화
+
+        for token_id, token_dict in data["id_to_token"].items(): # 저장된 vocab 항목을 하나씩 꺼냄; token_id는 JSON key라 문자열 상태
+            token_id_int = int(token_id)                       # save 때 str로 저장한 token id를 실제 tokenizer에서 쓰는 int id로 복원
+
+            if token_dict["type"] == "bytes":                 # save 때 bytes token이라고 표시한 항목이면 ex) [65] -> b"A"로 복원
+                self.id_to_token[token_id_int] = bytes(token_dict["value"])
+            elif token_dict["type"] == "tuple":               # save 때 merge token이라고 표시한 항목이면 ex) [69, 70] -> (69, 70)으로 복원
+                self.id_to_token[token_id_int] = tuple(token_dict["value"])
+            else:                                             # special token 문자열이면 ex) "<pad>" 그대로 복원
+                self.id_to_token[token_id_int] = token_dict["value"]
+
+        self.token_to_id = {}                                  # id_to_token을 복원했으므로 반대 방향 dict도 다시 만들기 위해 초기화
+        for token_id, token in self.id_to_token.items():       # 복원된 vocab을 돌면서 token -> id 방향 매핑을 재구성
+            self.token_to_id[token] = token_id                 # encode에서 token이나 merge pair로 id를 찾을 수 있게 반대 방향 저장
 
     def encode(self, text: str, add_bos_eos: bool = False) -> list[int]:
         """
