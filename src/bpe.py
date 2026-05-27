@@ -43,7 +43,22 @@ class BPETokenizer:
         1. 특수 토큰 4개를 고정 ID 0~3에 등록합니다.
         2. byte 0~255를 ID 4~259에 bytes([byte_value]) 형태로 등록합니다.
         """
-        raise NotImplementedError("_init_special_tokens를 구현하세요.")
+        self.id_to_token[0] = PAD_TOKEN
+        self.id_to_token[1] = UNK_TOKEN
+        self.id_to_token[2] = BOS_TOKEN
+        self.id_to_token[3] = EOS_TOKEN
+
+        self.token_to_id[PAD_TOKEN] = 0
+        self.token_to_id[UNK_TOKEN] = 1
+        self.token_to_id[BOS_TOKEN] = 2
+        self.token_to_id[EOS_TOKEN] = 3
+
+        for i in range(NUM_BYTES):
+            tok_id = BYTE_OFFSET + i
+            self.id_to_token[tok_id] = i
+            self.token_to_id[i] = tok_id
+
+        # raise NotImplementedError("_init_special_tokens를 구현하세요.")
 
     def get_pad_id(self):
         """padding 토큰 ID."""
@@ -71,7 +86,42 @@ class BPETokenizer:
         - 새 token ID를 만들고, 시퀀스의 해당 pair를 새 ID로 치환합니다.
         - `self.merges`, `self.id_to_token`, `self.token_to_id`를 갱신합니다.
         """
-        raise NotImplementedError("BPETokenizer.train을 구현하세요.")
+        self._init_special_tokens()
+    
+        
+        tokens = [self.token_to_id[byte] for byte in corpus.encode("utf-8")]
+
+        
+        while len(self.id_to_token) < self.vocab_size:
+            pair_count = {}
+            for i in range(len(tokens) - 1):
+               
+                pair = (tokens[i], tokens[i+1])
+                if pair not in pair_count:
+                    pair_count[pair] = 1
+                else:
+                    pair_count[pair] += 1
+            best_pair = max(pair_count, key=lambda pair: pair_count[pair])
+            
+            if best_pair not in self.token_to_id:
+                new_id = len(self.token_to_id)
+                self.token_to_id[best_pair] = new_id
+                self.id_to_token[new_id] = best_pair
+                self.merges.append(best_pair)
+            
+            new_token = []
+            i = 0
+            while i < len(tokens):
+                if tokens[i] == best_pair[0] and tokens[i+1] == best_pair[1]:
+                    new_token.append(self.token_to_id[best_pair])
+                    i += 2
+                else:
+                    new_token.append(tokens[i])
+                    i += 1
+            tokens = new_token              
+
+
+        # raise NotImplementedError("BPETokenizer.train을 구현하세요.")
 
     def save(self, path: str | Path):
         """
