@@ -78,8 +78,29 @@ class BPETokenizer:
     def get_eos_id(self):
         """문장 끝 토큰 ID."""
         return SPECIAL_IDS[EOS_TOKEN]
+    
+    def find_freq_pair(byte_id_sequence):
+        """자주 등장하는 인접 쌍 찾기
+        인접한 두 쌍:count의 dict을 만들고, 가장 count가 높은 pair을 반환한다. 만약 2번 이상 나타나는
+        쌍이 없으면 None을 반환한다.
+
+        Args:
+            byte_id_sequence (list): id bytes list
+
+        Returns:
+            _type_: int
+        """
+        pair_count = Counter(zip(byte_id_sequence, byte_id_sequence[1:]))
+        
+        if pair_count.most_common(1)[1] >= 2:
+            most_common_pair = pair_count.most_common(1)[0]
+            return most_common_pair
+        
+        return None
 
     def train(self, corpus: str):
+        from collections import Counter
+
         """
         TODO: 코퍼스에서 BPE merge rule과 vocabulary를 학습합니다.
 
@@ -89,6 +110,11 @@ class BPETokenizer:
         - 새 token ID를 만들고, 시퀀스의 해당 pair를 새 ID로 치환합니다.
         - `self.merges`, `self.id_to_token`, `self.token_to_id`를 갱신합니다.
         """
+        # corpus를 utf-8로 변환하고 byte sequence를 만든다.
+        byte_id_sequence = bytes(corpus.encode("utf-8"))
+        
+        
+        
         raise NotImplementedError("BPETokenizer.train을 구현하세요.")
 
     def save(self, path: str | Path):
