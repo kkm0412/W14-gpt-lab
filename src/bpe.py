@@ -45,12 +45,22 @@ class BPETokenizer:
         """
         # 특수 토큰을 고정 ID 0~3에 등록한다.
         self.id_to_token = {idx:token for idx, token in enumerate(SPECIAL_TOKENS)}
+        print(self.id_to_token)
+        
         self.token_to_id.update(SPECIAL_IDS)
+        print(self.token_to_id)
         
         # 바이트를 등록한다.
-        for id in range(NUM_BYTES):
-            self.id_to_token[BYTE_OFFSET+id] = bytes([id])
+        for idx in range(NUM_BYTES):
+            self.id_to_token[BYTE_OFFSET+idx] = bytes([idx])
+        print("\nid_to_token:", list(self.id_to_token.keys())[4:7])
+        print("id_to_token:", list(self.id_to_token.values())[4:7])
         
+        self.token_to_id.update({bytes([idx]):(BYTE_OFFSET+idx) for idx in range(NUM_BYTES)})
+        print("\ntoken_to_id:", list(self.token_to_id.keys())[0:7])
+        print("token_to_id:", list(self.token_to_id.values())[0:7])
+        
+        return
         raise NotImplementedError("_init_special_tokens를 구현하세요.")
 
     def get_pad_id(self):
@@ -115,3 +125,7 @@ class BPETokenizer:
         - byte를 하나씩 decode하지 말고, 마지막에 `bytes(...).decode("utf-8")`를 한 번만 호출합니다.
         """
         raise NotImplementedError("BPETokenizer.decode를 구현하세요.")
+
+if __name__ == "__main__":
+    tokenizer = BPETokenizer()
+    tokenizer._init_special_tokens()
