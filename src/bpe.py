@@ -99,6 +99,8 @@ class BPETokenizer:
                     pair_count[pair] = 1
                 else:
                     pair_count[pair] += 1
+            if not pair_count:
+                break
             best_pair = max(pair_count, key=lambda pair: pair_count[pair])
             
             if best_pair not in self.token_to_id:
@@ -110,7 +112,7 @@ class BPETokenizer:
             new_token = []
             i = 0
             while i < len(tokens):
-                if tokens[i] == best_pair[0] and tokens[i+1] == best_pair[1]:
+                if i < len(tokens) - 1 and tokens[i] == best_pair[0] and tokens[i+1] == best_pair[1]:
                     new_token.append(self.token_to_id[best_pair])
                     i += 2
                 else:
@@ -237,8 +239,6 @@ class BPETokenizer:
             left, right = token
             return self.expand(left) + self.expand(right)
         return []
-
-
 
     def decode(self, ids: list[int], skip_special: bool = True) -> str:
         """
