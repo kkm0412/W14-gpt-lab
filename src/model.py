@@ -50,11 +50,21 @@ class FeedForward(nn.Module):
     def __init__(self, d_model: int, dropout: float = 0.1, mult: int = 4):
         super().__init__()
         # TODO: d_model -> mult*d_model -> d_model 구조의 작은 MLP를 정의하세요.
-        raise NotImplementedError("FeedForward.__init__을 구현하세요.")
+        self.input_layer = nn.Linear(d_model, mult * d_model)
+        self.output_layer = nn.Linear(mult * d_model, d_model)
+        self.dropout = nn.Dropout(dropout)
+        self.net = nn.Sequential(
+            self.input_layer,
+            GELU(),
+            self.output_layer,
+            self.dropout,
+        )
+        # raise NotImplementedError("FeedForward.__init__을 구현하세요.")
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """TODO: FeedForward 네트워크를 통과시킵니다."""
-        raise NotImplementedError("FeedForward.forward를 구현하세요.")
+        return self.net(x)
+        # raise NotImplementedError("FeedForward.forward를 구현하세요.")
 
 
 class TransformerBlock(nn.Module):
@@ -71,11 +81,40 @@ class TransformerBlock(nn.Module):
         qkv_bias: bool = False,
     ):
         super().__init__()
+
+        # self.net1 = nn.Sequential(
+        #     LayerNorm(d_model),
+        #     MultiHeadAttention(d_model, n_heads, drop_rate, qkv_bias),
+        #     nn.Dropout(drop_rate),
+        # )
+        # self.net2 = nn.Sequential(
+        #     LayerNorm(d_model),
+        #     FeedForward(d_model, drop_rate, 4),
+        #     nn.Dropout(drop_rate),
+        # )
+        self.attention = MultiHeadAttention(d_model, n_heads, drop_rate, qkv_bias)
+        self.ffn = FeedForward(d_model, drop_rate, 4)
+        self.layernorm1 = LayerNorm(d_model)
+        self.layernorm2 = LayerNorm(d_model)
+        self.dropout = nn.Dropout(drop_rate)
         # TODO: attention, ffn, layernorm, dropout을 정의하세요.
-        raise NotImplementedError("TransformerBlock.__init__을 구현하세요.")
+        # raise NotImplementedError("TransformerBlock.__init__을 구현하세요.")
 
     def forward(self, x: torch.Tensor, causal_mask: bool = True) -> torch.Tensor:
         """TODO: attention과 ffn을 residual connection으로 연결합니다."""
+        # 전체 트랜스포머 모델 작동 순서(gpt모델 안에서 작동)
+        shortcut = x
+        x = self.layernorm1(x)
+        x = self.attention(x, causal_mask)
+        x = self.dropout(x)
+        x = x + shortcut
+
+        shortcut = x
+        x = self.layernorm2(x)
+        x = self.ffn(x)
+        x = self.dropout(x)
+        x = x + shortcut
+        return x
         raise NotImplementedError("TransformerBlock.forward를 구현하세요.")
 
 
@@ -86,7 +125,26 @@ class GPTModel(nn.Module):
         super().__init__()
         self.config = config
         # TODO: embedding, blocks, final layernorm, lm_head를 정의하세요.
-        raise NotImplementedError("GPTModel.__init__을 구현하세요.")
+        self.embedding = InputEmbedding(
+            config["vocab_size"],
+            config["emb_dim"],
+            config["context_length"],
+            config["drop_rate"]
+            )
+        self.blocks = nn.ModuleList(
+            [
+            TransformerBlock(
+                config["d_model"],
+                config["n_heads"],
+                config["drop_rate"],
+                config["qkv_bias"]
+                )
+            for _ in range(config["n_layers"])
+            ]
+            )
+        self.finalnorm = LayerNorm(config["emb_dim"])
+        self.lm_head = nn.Linear(config["emb_dim"], config["vocab_size"])
+        # raise NotImplementedError("GPTModel.__init__을 구현하세요.")
 
     def forward(
         self,
@@ -95,12 +153,23 @@ class GPTModel(nn.Module):
     ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         """
         TODO: logits를 만들고, targets가 있으면 cross entropy loss도 함께 반환합니다.
-
         Returns:
             targets가 None이면 logits
             targets가 있으면 (loss, logits)
         """
-        raise NotImplementedError("GPTModel.forward를 구현하세요.")
+        x = self.embedding(idx)
+        for block in self.blocks:
+            x = block(x)
+        x = self.finalnorm(x)
+        logits = self.lm_head(x)
+
+        if targets is not None:
+            loss = torch.nn.functional.cross_entropy(
+                logits.reshape(-1, logits.size(-1)),
+                targets.reshape(-1),
+            )
+            return loss, logits
+        return logits
 
 
 def generate_text_simple(
