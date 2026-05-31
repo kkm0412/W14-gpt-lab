@@ -134,7 +134,7 @@ class GPTModel(nn.Module):
         self.blocks = nn.ModuleList(
             [
             TransformerBlock(
-                config["d_model"],
+                config["emb_dim"],
                 config["n_heads"],
                 config["drop_rate"],
                 config["qkv_bias"]
@@ -179,4 +179,15 @@ def generate_text_simple(
     context_size: int,
 ) -> torch.Tensor:
     """TODO: greedy 방식으로 max_new_tokens만큼 다음 토큰을 이어 붙입니다."""
+    for _ in range(max_new_tokens):
+        idx_cond = idx[:, -context_size: ]
+        with torch.no_grad():
+            logits = model(idx_cond)
+
+        logits = logits[: , -1, :]
+        probas = torch.softmax(logits, dim=-1)
+        idx_next = torch.argmax(probas, dim=-1, keepdim=True)
+        idx = torch.cat((idx, idx_next), dim=1)
+
+    return idx
     raise NotImplementedError("generate_text_simple을 구현하세요.")
