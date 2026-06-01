@@ -141,7 +141,15 @@ def generate_and_print_sample(
     idx = idx.unsqueeze(0).to(device=device)
     generated = generate(model, idx, max_new_tokens, context_size, temperature, top_k,)
 
-    end_context = tokenizer.decode(generated.squeeze(0).tolist())
+    token_ids = generated.squeeze(0).tolist()
+    try:
+        end_context = tokenizer.decode(token_ids)
+    except UnicodeDecodeError:
+        byte_values = []
+        for token_id in token_ids:
+            byte_values.extend(tokenizer.expand(token_id))
+        end_context = bytes(byte_values).decode("utf-8", errors="replace")
+
     print(end_context)
     model.train()
     # raise NotImplementedError("generate_and_print_sample을 구현하세요.")
