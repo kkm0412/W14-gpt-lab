@@ -130,8 +130,8 @@ def generate_and_print_sample(
     start_context: str,
     max_new_tokens: int = 50,
     context_size: int = 256,
-    temperature: float = 0.8,
-    top_k: int | None = 40,
+    temperature: float = 0.5,
+    top_k: int | None = 10,
 ) -> None:
     """TODO: start_context를 encode하고 generate 후 decode하여 출력합니다."""
 
