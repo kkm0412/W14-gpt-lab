@@ -1,5 +1,6 @@
 import csv
 import json
+import math
 import random
 import re
 from pathlib import Path
@@ -12,6 +13,88 @@ try:
     from .model import GPTModel
 except ImportError:
     from model import GPTModel
+
+
+class LoRALinear(nn.Module):
+    """기존 Linear weight는 고정하고 low-rank adapter만 학습하는 Linear wrapper."""
+
+    def __init__(
+        self,
+        linear: nn.Linear,
+        rank: int = 8,
+        alpha: float = 16.0,
+        dropout: float = 0.0,
+    ):
+        super().__init__()
+        if rank <= 0:
+            raise ValueError("LoRA rank는 1 이상이어야 합니다.")
+
+        self.linear = linear
+        self.rank = rank
+        self.alpha = alpha
+        self.scaling = alpha / rank
+        self.dropout = nn.Dropout(dropout)
+        self.lora_A = nn.Linear(linear.in_features, rank, bias=False)
+        self.lora_B = nn.Linear(rank, linear.out_features, bias=False)
+
+        for param in self.linear.parameters():
+            param.requires_grad = False
+
+        nn.init.kaiming_uniform_(self.lora_A.weight, a=math.sqrt(5))
+        nn.init.zeros_(self.lora_B.weight)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        base = self.linear(x)
+        update = self.lora_B(self.lora_A(self.dropout(x))) * self.scaling
+        return base + update
+
+
+def count_lora_parameters(module: nn.Module, trainable_only: bool = False) -> int:
+    total = 0
+    for child in module.modules():
+        if isinstance(child, LoRALinear):
+            for param in (child.lora_A.weight, child.lora_B.weight):
+                if not trainable_only or param.requires_grad:
+                    total += param.numel()
+    return total
+
+
+def apply_lora_to_gpt(
+    gpt_model: GPTModel,
+    target_modules: tuple[str, ...] = ("W_q", "W_v"),
+    rank: int = 8,
+    alpha: float = 16.0,
+    dropout: float = 0.0,
+) -> dict:
+    """GPT attention projection에 LoRA adapter를 붙입니다."""
+    replaced = 0
+    for block in gpt_model.blocks:
+        attention = getattr(block, "attention", None)
+        if attention is None:
+            attention = getattr(block, "att", None)
+        if attention is None:
+            raise AttributeError("Transformer block에서 attention module을 찾지 못했습니다.")
+
+        for module_name in target_modules:
+            linear = getattr(attention, module_name)
+            if isinstance(linear, LoRALinear):
+                continue
+            if not isinstance(linear, nn.Linear):
+                raise TypeError(f"{module_name}은 nn.Linear일 때만 LoRA를 붙일 수 있습니다.")
+            setattr(
+                attention,
+                module_name,
+                LoRALinear(linear, rank=rank, alpha=alpha, dropout=dropout),
+            )
+            replaced += 1
+
+    return {
+        "num_adapters": replaced,
+        "rank": rank,
+        "alpha": alpha,
+        "target_modules": list(target_modules),
+        "parameters": count_lora_parameters(gpt_model),
+    }
 
 
 def _clean_text(text: str | None) -> str:

@@ -135,6 +135,35 @@ class TestGPTForSequenceClassification:
             pytest.fail("GPTForSequenceClassification 미구현")
         assert logits.shape == (2, 2)
 
+    def test_apply_lora_to_gpt_adds_trainable_adapters(self):
+        """LoRA를 붙여도 출력 shape는 유지되고 adapter 파라미터가 생긴다."""
+        from model import GPTModel
+        from finetune import (
+            GPTForSequenceClassification,
+            LoRALinear,
+            apply_lora_to_gpt,
+            count_lora_parameters,
+        )
+
+        backbone = GPTModel(GPT_CONFIG_TINY)
+        info = apply_lora_to_gpt(
+            backbone,
+            target_modules=("W_q", "W_v"),
+            rank=2,
+            alpha=4.0,
+            dropout=0.0,
+        )
+
+        assert info["num_adapters"] == 2
+        assert isinstance(backbone.blocks[0].attention.W_q, LoRALinear)
+        assert isinstance(backbone.blocks[0].attention.W_v, LoRALinear)
+        assert count_lora_parameters(backbone) == 128
+
+        model = GPTForSequenceClassification(backbone, num_labels=2)
+        input_ids = torch.randint(0, GPT_CONFIG_TINY["vocab_size"], (2, 8))
+        logits = model(input_ids)
+        assert logits.shape == (2, 2)
+
 
 class TestSentimentTrainEval:
     """훈련/평가 함수가 호출 가능한지 확인."""
