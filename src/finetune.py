@@ -179,6 +179,8 @@ def train_epoch_sentiment(
     """
     model.to(device)
     model.train()
+    if not any(param.requires_grad for param in model.gpt.parameters()):
+        model.gpt.eval()
 
     total_loss = 0.0
     total_correct = 0
