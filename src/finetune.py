@@ -259,6 +259,10 @@ def train_epoch_sentiment(
     train_loader,
     optimizer: torch.optim.Optimizer,
     device: torch.device,
+    log_every: int | None = None,
+    step_history: list[dict] | None = None,
+    start_step: int = 0,
+    epoch: int | None = None,
 ) -> tuple[float, float]:
     """
     TODO: 감성 분류 모델을 1 epoch 훈련하고 (평균 loss, accuracy)를 반환합니다.
@@ -275,8 +279,11 @@ def train_epoch_sentiment(
     total_loss = 0.0
     total_correct = 0
     total_examples = 0
+    window_loss = 0.0
+    window_correct = 0
+    window_examples = 0
 
-    for input_ids, labels in train_loader:
+    for batch_idx, (input_ids, labels) in enumerate(train_loader, start=1):
         input_ids = input_ids.to(device)
         labels = labels.to(device) if torch.is_tensor(labels) else torch.tensor(labels, device=device)
         labels = labels.long()
@@ -287,9 +294,33 @@ def train_epoch_sentiment(
         optimizer.step()
 
         batch_size = labels.size(0)
+        batch_correct = (logits.argmax(dim=-1) == labels).sum().item()
         total_loss += loss.item() * batch_size
-        total_correct += (logits.argmax(dim=-1) == labels).sum().item()
+        total_correct += batch_correct
         total_examples += batch_size
+        window_loss += loss.item() * batch_size
+        window_correct += batch_correct
+        window_examples += batch_size
+
+        should_log = (
+            step_history is not None
+            and log_every is not None
+            and log_every > 0
+            and (batch_idx == 1 or batch_idx % log_every == 0 or batch_idx == len(train_loader))
+        )
+        if should_log and window_examples > 0:
+            step_history.append(
+                {
+                    "epoch": epoch,
+                    "step": start_step + batch_idx,
+                    "batch": batch_idx,
+                    "train_loss": window_loss / window_examples,
+                    "train_acc": window_correct / window_examples,
+                }
+            )
+            window_loss = 0.0
+            window_correct = 0
+            window_examples = 0
 
     if total_examples == 0:
         return float("nan"), float("nan")
@@ -301,6 +332,9 @@ def evaluate_sentiment(
     model: GPTForSequenceClassification,
     data_loader,
     device: torch.device,
+    log_every: int | None = None,
+    step_history: list[dict] | None = None,
+    split_name: str = "eval",
 ) -> tuple[float, float]:
     """
     TODO: 감성 분류 모델을 평가하고 (평균 loss, accuracy)를 반환합니다.
@@ -313,7 +347,7 @@ def evaluate_sentiment(
     total_examples = 0
 
     with torch.no_grad():
-        for input_ids, labels in data_loader:
+        for batch_idx, (input_ids, labels) in enumerate(data_loader, start=1):
             input_ids = input_ids.to(device)
             labels = labels.to(device) if torch.is_tensor(labels) else torch.tensor(labels, device=device)
             labels = labels.long()
@@ -321,9 +355,28 @@ def evaluate_sentiment(
             loss, logits = model(input_ids, labels)
 
             batch_size = labels.size(0)
+            batch_correct = (logits.argmax(dim=-1) == labels).sum().item()
             total_loss += loss.item() * batch_size
-            total_correct += (logits.argmax(dim=-1) == labels).sum().item()
+            total_correct += batch_correct
             total_examples += batch_size
+
+            should_log = (
+                step_history is not None
+                and log_every is not None
+                and log_every > 0
+                and (batch_idx == 1 or batch_idx % log_every == 0 or batch_idx == len(data_loader))
+            )
+            if should_log:
+                step_history.append(
+                    {
+                        "split": split_name,
+                        "step": batch_idx,
+                        "loss": loss.item(),
+                        "acc": batch_correct / batch_size,
+                        "cum_loss": total_loss / total_examples,
+                        "cum_acc": total_correct / total_examples,
+                    }
+                )
 
     if total_examples == 0:
         return float("nan"), float("nan")
