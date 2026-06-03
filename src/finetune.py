@@ -306,7 +306,7 @@ def train_epoch_sentiment(
             step_history is not None
             and log_every is not None
             and log_every > 0
-            and (batch_idx == 1 or batch_idx % log_every == 0 or batch_idx == len(train_loader))
+            and (batch_idx % log_every == 0 or batch_idx == len(train_loader))
         )
         if should_log and window_examples > 0:
             step_history.append(
@@ -364,7 +364,7 @@ def evaluate_sentiment(
                 step_history is not None
                 and log_every is not None
                 and log_every > 0
-                and (batch_idx == 1 or batch_idx % log_every == 0 or batch_idx == len(data_loader))
+                and (batch_idx % log_every == 0 or batch_idx == len(data_loader))
             )
             if should_log:
                 step_history.append(
