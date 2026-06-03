@@ -93,6 +93,22 @@ class ReviewSentimentDataset(Dataset):
         self.max_length = max_length
 
         self.pad_id = tokenizer.get_pad_id() if pad_id is None else pad_id
+        self.encoded_items = []
+        for item in self.data:
+            if "input_ids" in item:
+                token_ids = list(item["input_ids"])
+            elif "token_ids" in item:
+                token_ids = list(item["token_ids"])
+            else:
+                token_ids = tokenizer.encode(item["text"], add_bos_eos=True)
+
+            token_ids = token_ids[: self.max_length]
+            if len(token_ids) < self.max_length:
+                token_ids = token_ids + [self.pad_id] * (self.max_length - len(token_ids))
+
+            input_ids = torch.tensor(token_ids, dtype=torch.long)
+            label = int(item["label"])
+            self.encoded_items.append((input_ids, label))
 
     def __len__(self) -> int:
         return len(self.data)
@@ -101,16 +117,7 @@ class ReviewSentimentDataset(Dataset):
         """
         TODO: text를 encode하고 max_length까지 자르거나 padding한 뒤 label과 함께 반환합니다.
         """
-        item = self.data[idx]
-        token_ids = self.tokenizer.encode(item["text"], add_bos_eos=True)
-
-        token_ids = token_ids[: self.max_length]
-        if len(token_ids) < self.max_length:
-            token_ids = token_ids + [self.pad_id] * (self.max_length - len(token_ids))
-
-        input_ids = torch.tensor(token_ids, dtype=torch.long)
-        label = int(item["label"])
-        return input_ids, label
+        return self.encoded_items[idx]
 
 
 class GPTForSequenceClassification(nn.Module):

@@ -30,6 +30,17 @@ class DummyTokenizer:
         return ids
 
 
+class CountingTokenizer(DummyTokenizer):
+    """Dataset이 같은 리뷰를 매번 다시 encode하지 않는지 확인하기 위한 tokenizer."""
+
+    def __init__(self):
+        self.encode_calls = 0
+
+    def encode(self, text, add_bos_eos=False):
+        self.encode_calls += 1
+        return super().encode(text, add_bos_eos=add_bos_eos)
+
+
 GPT_CONFIG_TINY = {
     "vocab_size": 128,
     "context_length": 16,
@@ -92,6 +103,19 @@ class TestReviewSentimentDataset:
         assert input_ids.shape == (8,)
         assert input_ids.dtype == torch.long
         assert label == 1
+
+    def test_review_sentiment_dataset_caches_token_ids(self):
+        """같은 샘플을 여러 번 꺼내도 tokenizer.encode를 반복 호출하지 않는다."""
+        from finetune import ReviewSentimentDataset
+
+        tokenizer = CountingTokenizer()
+        data = [{"text": "재미있다", "label": 1}]
+        ds = ReviewSentimentDataset(data, tokenizer, max_length=8)
+
+        assert tokenizer.encode_calls == 1
+        _ = ds[0]
+        _ = ds[0]
+        assert tokenizer.encode_calls == 1
 
 
 class TestGPTForSequenceClassification:
