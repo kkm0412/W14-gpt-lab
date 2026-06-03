@@ -240,7 +240,7 @@ class BPETokenizer:
             return self.expand(left) + self.expand(right)
         return []
 
-    def decode(self, ids: list[int], skip_special: bool = True) -> str:
+    def decode(self, ids: list[int], skip_special: bool = True, errors: str = "strict") -> str:
         """
         TODO: token ID 리스트를 문자열로 복원합니다.
 
@@ -254,5 +254,5 @@ class BPETokenizer:
             if skip_special and token in SPECIAL_IDS.values():
                 continue
             byte_values.extend(self.expand(token))
-        return bytes(byte_values).decode("utf-8")
+        return bytes(byte_values).decode("utf-8", errors=errors)
         # raise NotImplementedError("BPETokenizer.decode를 구현하세요.")

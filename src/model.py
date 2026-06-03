@@ -131,8 +131,8 @@ class GPTModel(nn.Module):
             config["context_length"],
             config["drop_rate"]
             )
-        self.blocks = nn.ModuleList(
-            [
+        self.trf_blocks = nn.Sequential(
+            *[
             TransformerBlock(
                 config["emb_dim"],
                 config["n_heads"],
@@ -142,9 +142,19 @@ class GPTModel(nn.Module):
             for _ in range(config["n_layers"])
             ]
             )
-        self.finalnorm = LayerNorm(config["emb_dim"])
-        self.lm_head = nn.Linear(config["emb_dim"], config["vocab_size"])
+        self.final_layernorm = LayerNorm(config["emb_dim"])
+        self.lm_head = nn.Linear(config["emb_dim"], config["vocab_size"], bias=False)
         # raise NotImplementedError("GPTModel.__init__을 구현하세요.")
+
+    @property
+    def blocks(self) -> nn.Sequential:
+        """Backward-compatible alias used by earlier notebook cells."""
+        return self.trf_blocks
+
+    @property
+    def finalnorm(self) -> LayerNorm:
+        """Backward-compatible alias used by earlier fine-tuning code."""
+        return self.final_layernorm
 
     def forward(
         self,
@@ -158,9 +168,8 @@ class GPTModel(nn.Module):
             targets가 있으면 (loss, logits)
         """
         x = self.embedding(idx)
-        for block in self.blocks:
-            x = block(x)
-        x = self.finalnorm(x)
+        x = self.trf_blocks(x)
+        x = self.final_layernorm(x)
         logits = self.lm_head(x)
 
         if targets is not None:
