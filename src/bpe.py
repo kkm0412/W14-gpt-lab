@@ -179,16 +179,28 @@ class BPETokenizer:
         self.token_to_id = {}
         self.merges = [tuple(pair) for pair in data["merges"]]
 
-        for item in data["id_to_token"]:
+        id_to_token_data = data["id_to_token"]
+        if isinstance(id_to_token_data, dict):
+            items = [
+                {"id": token_id, **token_info}
+                for token_id, token_info in id_to_token_data.items()
+            ]
+        else:
+            items = id_to_token_data
+
+        for item in items:
             token_id = int(item["id"])
             token_type = item["type"]
             value = item["value"]
 
             if token_type == "special":
                 token = value
-            elif token_type == "byte":
-                token = int(value)
-            elif token_type == "merge":
+            elif token_type in {"byte", "bytes"}:
+                if isinstance(value, list):
+                    token = int(value[0])
+                else:
+                    token = int(value)
+            elif token_type in {"merge", "tuple"}:
                 token = tuple(value)
             else:
                 raise ValueError(f"알 수 없는 token type입니다: {token_type}")
