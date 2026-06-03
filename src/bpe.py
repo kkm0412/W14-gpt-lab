@@ -218,26 +218,21 @@ class BPETokenizer:
         - add_bos_eos=True이면 앞뒤에 bos/eos ID를 붙입니다.
         """
         id_list = [self.token_to_id[byte] for byte in text.encode("utf-8")]
-        
-        while (True):
-            copied_list = []
+
+        for merge_pair in self.merges:
+            merged_list = []
             i = 0
-            is_changed = False
             while i < len(id_list):
-                if i < len(id_list) -1:
-                    pair = (id_list[i], id_list[i+1])
-                    if pair in self.merges:
-                        copied_list.append(self.token_to_id[pair])
-                        i += 2
-                        is_changed = True
-                        continue
-                
-                copied_list.append(id_list[i])
+                if i < len(id_list) - 1 and (id_list[i], id_list[i + 1]) == merge_pair:
+                    merged_list.append(self.token_to_id[merge_pair])
+                    i += 2
+                    continue
+
+                merged_list.append(id_list[i])
                 i += 1
 
-            id_list = copied_list
-            if is_changed != True:
-                break
+            id_list = merged_list
+
         if add_bos_eos:
             id_list = [self.get_bos_id()] + id_list + [self.get_eos_id()]
         return id_list
